@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm run build:client",
+  "buildCommand": "pnpm run build:vercel",
   "outputDirectory": "dist/public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
