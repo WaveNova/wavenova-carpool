@@ -1,5 +1,6 @@
 import { eq, and, sql, desc, asc, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2";
 import {
   InsertUser, users,
   rides, rideRequests,
@@ -13,7 +14,23 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const rawUrl = process.env.DATABASE_URL;
+      const baseUrl = rawUrl.includes("?") ? rawUrl.slice(0, rawUrl.indexOf("?")) : rawUrl;
+      const parsed = new URL(baseUrl.replace(/^mysql:\/\//, "http://"));
+      const pool = mysql.createPool({
+        host: parsed.hostname,
+        port: parsed.port ? parseInt(parsed.port) : 4000,
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database: parsed.pathname.slice(1),
+        ssl: { rejectUnauthorized: true },
+        waitForConnections: true,
+        connectionLimit: 3,
+        maxIdle: 3,
+        idleTimeout: 60000,
+        connectTimeout: 10000,
+      });
+      _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
