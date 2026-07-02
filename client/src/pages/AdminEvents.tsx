@@ -69,6 +69,33 @@ const statusI18nKeys: Record<string, TranslationKey> = {
   cancelled: "event.statusCancelled",
 };
 
+function compressImage(file: File, maxDimension: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        if (width >= height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality).split(",")[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 function CoverImageUpload({ eventId, currentUrl }: { eventId: number; currentUrl?: string | null }) {
   const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,28 +122,23 @@ function CoverImageUpload({ eventId, currentUrl }: { eventId: number; currentUrl
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (fileRef.current) fileRef.current.value = "";
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be under 5MB");
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Image must be under 20MB");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      uploadCover.mutate({
-        eventId,
-        imageBase64: base64,
-        mimeType: file.type,
-      });
-    };
-    reader.readAsDataURL(file);
-    // Reset input
-    if (fileRef.current) fileRef.current.value = "";
+    try {
+      const base64 = await compressImage(file, 1920, 0.85);
+      uploadCover.mutate({ eventId, imageBase64: base64, mimeType: "image/jpeg" });
+    } catch {
+      toast.error(t("admin.coverUploadFailed"));
+    }
   };
 
   const handleRemove = () => {
