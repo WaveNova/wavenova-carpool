@@ -178,9 +178,10 @@ export const appRouter = router({
         }
 
         // Verify driver against Luma attendee list if event has a Luma URL.
-        // Block ride creation if the driver is not a verified attendee.
+        // Skip for admins and when LUMA_API_KEY is not configured.
         let isVerified = 0;
-        if (event.lumaEventUrl) {
+        const isAdmin = ctx.user.role === "admin";
+        if (event.lumaEventUrl && !isAdmin && process.env.LUMA_API_KEY) {
           if (!ctx.user.email) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -194,6 +195,8 @@ export const appRouter = router({
               message: `LUMA_NOT_REGISTERED:${event.lumaEventUrl}`,
             });
           }
+          isVerified = 1;
+        } else if (isAdmin) {
           isVerified = 1;
         }
 
@@ -230,9 +233,11 @@ export const appRouter = router({
     join: protectedProcedure
       .input(z.object({ rideId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        // Verify passenger against Luma attendee list if the event has a Luma URL
+        // Verify passenger against Luma attendee list if the event has a Luma URL.
+        // Skip for admins and when LUMA_API_KEY is not configured.
         const rideInfo = await getRideById(input.rideId);
-        if (rideInfo?.eventLumaUrl) {
+        const isAdminPassenger = ctx.user.role === "admin";
+        if (rideInfo?.eventLumaUrl && !isAdminPassenger && process.env.LUMA_API_KEY) {
           if (!ctx.user.email) {
             throw new TRPCError({
               code: "BAD_REQUEST",
